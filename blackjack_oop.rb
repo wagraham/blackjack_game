@@ -44,7 +44,7 @@ class Card
   end
 
   def pretty_output #this is simply overwriting the to_s cmd that auto calls with puts
-    puts "The #{@face_value} of #{@suit}"
+    puts "The #{face_value} of #{find_suit}"
   end
 
   def to_s #when to_s is auto called, it will now use pretty output
@@ -98,27 +98,24 @@ module Hand
   end
 
   def total
-    face_values = cards.map{ |card| card.face_value }
+    face_values = cards.map{|card| card.face_value}
 
-    total = 0
+   total = 0
     face_values.each do |val|
-    if val == "A"
-      total +=11 #but it can also be one; see correction below. 
-    elsif val.to_i == 0
-      total += 10 # because Jacks, Queens, and Kinds default to value 0; what about aces?
-    else
-      total += val.to_i
+      if val == "A"
+        total += 11
+      else
+        total += (val.to_i == 0 ? 10 : val.to_i)
+      end
     end
-  
+
     #correct for Aces
-    face_values.select{ |val| val == "A"}.count.times do
+    face_values.select{|val| val == "A"}.count.times do
       break if total <= 21
       total -= 10
-    end 
-
+    end
+    
     total
-  end
-   
   end
 
   def add_card(new_card)
@@ -126,7 +123,7 @@ module Hand
   end 
 
   def is_busted?
-    total > 21 # if true, will return true = is busted
+    total > Blackjack::BLACKJACK_AMOUNT # if true, will return true = is busted
   end 
 
 end
@@ -140,6 +137,10 @@ class Player
     @name = n
     @cards = [] 
   end
+
+  def show_flop
+    show_hand
+  end
 end
 
 class Dealer
@@ -151,103 +152,146 @@ class Dealer
     @name = "Dealer"
     @cards = [] 
   end 
+
+  def show_flop
+    puts "---- #{name}'s Hand ----"
+    puts "=> First card is hidden"
+    puts "=> second card is #{cards[1]}"
+  end
 end
 
 
-deck = Deck.new
+class Blackjack
+attr_accessor :deck, :player, :dealer
 
-player = Player.new("Wyatt")
-player.add_card(deck.deal_one)
-player.add_card(deck.deal_one)
-player.show_hand
-#player.total
-
-dealer = Dealer.new
-dealer.add_card(deck.deal_one)
-dealer.add_card(deck.deal_one)
-dealer.show_hand
-#dealer.total
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#c1 = Card.new('H', '3') #.new on the class Card, creates on object. 
-#Cards are objects created from a class, which object I can create by calling .new on the card class. 
-#.new is also calling the initialize method from Card class. 
-#c2 = Card.new('D', '4') #two objects; each have different states
-
-
-
-
-
-=begin < < < my experiments
-
-class Deck
-
-deck = []
-deck << [1,2,3,4,5,6,7,8,9,'Jack of', 'Queen of', 'King of', 'Ace of'].product(['Spades','Hearts','Clubs','Diamonds'])
-deck.shuffle!
-
-  def initialize; end
-
-  def hit_or_stay
-    if player 
-
-end 
-
-
-
-class Players
-
-attr_accessor :player
-attr_accessor :dealer 
+BLACKJACK_AMOUNT = 21
+DEALER_HIT_MIN = 17
 
   def initialize
-  
+    @deck = Deck.new
+    @player = Player.new("Player1")
+    @dealer = Dealer.new
   end
 
-  def show_cards
-    player_hand.inspect
-    dealer_hand.inspect    
+  def set_player_name
+    puts "What's your name?"
+    player.name = gets.chomp #player class getter here; but player is object of Player class, which has a name setter method. Confusing!
+  end
+
+  def deal_cards
+    player.add_card(deck.deal_one)
+    dealer.add_card(deck.deal_one)
+    player.add_card(deck.deal_one)
+    dealer.add_card(deck.deal_one)
   end 
 
+  def show_flop
+    player.show_flop
+    dealer.show_flop
+  end
+
+  def blackjack_or_bust?(player_or_dealer)
+    if player_or_dealer.total == BLACKJACK_AMOUNT #though player/dealer are dif. classes, they can both respond to method .total; thus, this method will work. 
+      if player_or_dealer.is_a?(Dealer)
+        puts "Sorry, dealer hits blackjack. #{player.name} loses."
+      else 
+        puts "Congratulations, you hit blackjack! #{player.name} wins!"
+      end
+      play_again?
+    elsif  player_or_dealer.is_busted?
+      if player_or_dealer.is_a?(Dealer)
+        puts "Congratulations, dealer busted. #{player.name} wins!"
+      else
+        puts "Sorry, #{player.name} busted. #{player.name} loses."
+      end  
+      play_again?
+    end
+  end
 
 
+  def player_turn
+    puts "{player.name}'s turn."
+
+    blackjack_or_bust?(player)
+
+    while !player.is_busted?
+      puts "What would you like to do? 1) hit 2) stay"
+      response = gets.chomp
+
+      if !['1', '2'].include?(response)
+        puts "Error: you must enter 1 or 2"
+        next
+      end
+
+      if response == '2'
+        puts "#{player.name} chose to stay"
+        break
+      end
+
+      #hit
+      new_card = deck.deal_one
+      puts "Dealing card to #{player.name}: #{new_card}"
+      player.add_card(new_card)
+      puts "#{player.name}'s total is now: #{player.total}"
+
+      blackjack_or_bust?(player)
+    end
+    puts "#{player.name} stays at #{player.total}"
+  end    
+
+  def dealer_turn
+    puts "Dealer's turn."
+
+    blackjack_or_bust?(dealer)
+    while dealer.total < DEALER_HIT_MIN
+      new_card = deck.deal_one
+      puts "Dealing card to dealer: #{new_card}"
+      dealer.add_card(new_card)
+      puts "Dealer total is now: #{dealer.total}"
+
+      blackjack_or_bust?(dealer)
+    end
+    puts "Dealer stays at #{dealer.total}."
+  end
+
+  def who_won? 
+    if player.total > dealer.total
+      puts "Congratulations, #{player.name} wins!"
+    elsif player.total < dealer.total
+      puts "Sorry, #{player.name} loses."
+    else
+      puts "It's a tie"
+    end
+    play_again? 
+  end
+      
+  def play_again?
+    puts ""
+    puts "Would you like to play again? 1) yes 2) no, exit"
+    if gets.chomp == '1'
+      puts "Starting new game ..."
+      puts ""
+      deck = Deck.new #reset deck for new game
+      player.cards = []
+      dealer.cards = [] 
+      start
+    else
+      puts "Goodbye!"
+      exit
+    end
+  end    
+
+  def start # write sequence first; use as guide to create methods!
+    set_player_name
+    deal_cards
+    show_flop
+    player_turn
+    dealer_turn
+    who_won?
+  end
 end
 
-class GameRules
+game = Blackjack.new
+game.start
 
-end
 
-class BlackJack
-
-end
-
-=end 
